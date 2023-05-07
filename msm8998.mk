@@ -238,6 +238,9 @@ PRODUCT_PACKAGES += \
     libhwbinder \
     libhwbinder.vendor
 
+# Hotword enrollment
+$(call inherit-product, vendor/xiaomi/msm8998-common/google/google.mk)
+
 # IFAA manager
 PRODUCT_PACKAGES += \
     IFAAService
@@ -266,6 +269,10 @@ PRODUCT_COPY_FILES += \
 # IRSC
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/sec_config:$(TARGET_COPY_OUT_VENDOR)/etc/sec_config
+
+# KProfiles
+PRODUCT_PACKAGES += \
+    KProfiles
 
 # Keymaster
 PRODUCT_PACKAGES += \
