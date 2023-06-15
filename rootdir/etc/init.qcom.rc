@@ -52,6 +52,7 @@ on post-fs-data
 
     # Create folder of nfc
     mkdir /data/vendor/nfc 0770 nfc nfc
+    mkdir /data/vendor/nfc/param 0770 nfc nfc
 
     # Create directory for tftp
     mkdir /data/vendor/tombstones 0771 system system
@@ -227,6 +228,9 @@ service vendor.loc_launcher /vendor/bin/loc_launcher
     user gps
     group gps
     task_profiles ServiceCapacityLow
+
+on property:persist.sys.xtra-daemon.enabled=*
+    restart vendor.loc_launcher
 
 service vendor.qcom-sh /vendor/bin/init.qcom.sh
     class late_start
