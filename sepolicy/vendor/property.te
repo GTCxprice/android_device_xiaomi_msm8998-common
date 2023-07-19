@@ -7,5 +7,8 @@ vendor_public_prop(vendor_fp_prop)
 # Sensors
 vendor_internal_prop(sensors_panel_prop)
 
+# Spectrum
+vendor_internal_prop(spectrum_prop}
+
 # Thermal engine
 vendor_internal_prop(thermal_prop)
