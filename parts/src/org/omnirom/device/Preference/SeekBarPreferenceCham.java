@@ -19,6 +19,7 @@ package org.omnirom.device.Preference;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.PixelFormat;
+import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -27,13 +28,13 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.DimenRes;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
 
@@ -61,6 +62,7 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
     private ImageView mImagePlus;
     private ImageView mImageMinus;
     private Drawable mProgressThumb;
+    private int mThumbDefaultValueColor;
 
     protected TextView mStatusText;
     private TextView mPopupValue;
@@ -68,11 +70,6 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
     private boolean mPopupAdded = false;
     private int mPopupWidth = 0;
     private boolean initialised = false;
-
-    private int mOffsetX;
-    private int mOffsetY;
-
-    private WindowManager.LayoutParams mPopupLayoutParams;
 
     public SeekBarPreferenceCham(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -122,10 +119,8 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
 
         TypedValue typedValue = new TypedValue();
         context.getTheme().resolveAttribute(android.R.attr.colorForeground, typedValue, true);
+        mThumbDefaultValueColor = typedValue.data;
         a.recycle();
-
-        mOffsetX = (int) context.getResources().getDimension(R.dimen.seek_bar_preference_cham_value_x_offset);
-        mOffsetY = (int) context.getResources().getDimension(R.dimen.seek_bar_preference_cham_value_y_offset);
     }
 
     private String getAttributeStringValue(AttributeSet attrs, String namespace, String name, String defaultValue) {
@@ -149,7 +144,6 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
         if (mImageMinus != null)
             mImageMinus.setEnabled(!disableDependent);
     }
-
     @Override
     public void onBindViewHolder(PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
@@ -195,49 +189,42 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
         mStatusText.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View view) {
-                int hint = R.string.seekbar_default_value_set;
-
+                final String defaultValue = getContext().getString(R.string.seekbar_default_value_set,
+                        mDefaultValue);
                 if (mDefaultValue != -1) {
                     if (mDefaultValue != mCurrentValue) {
                         mCurrentValue = mDefaultValue;
                         updateView();
+                        Toast.makeText(getContext(), defaultValue, Toast.LENGTH_LONG).show();
                     } else {
-                        hint = R.string.seekbar_default_value_already_set;
+                        Toast.makeText(getContext(), R.string.seekbar_default_value_already_set,
+                                Toast.LENGTH_LONG).show();
                     }
                 } else {
-                    hint = R.string.seekbar_no_default_value;
+                    Toast.makeText(getContext(), R.string.seekbar_no_default_value,
+                            Toast.LENGTH_LONG).show();
                 }
-                Toast.makeText(getContext(), hint, Toast.LENGTH_LONG).show();
                 return true;
             }
         });
 
-        if (mPopupWidth == 0) {
-            mPopupWidth = (int) getContext().getResources().getDimension(R.dimen.seek_bar_popup_text_width);
-        }
-
-        mPopupValue = onInflatePopupLayout(getContext(), LayoutInflater.from(getContext()));
-        mPopupLayoutParams = getPopupLayoutParams(getContext());
-        mPopupValue.setLayoutParams(mPopupLayoutParams);
+        LayoutInflater mInflater = (LayoutInflater) getContext()
+                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        mPopupValue = (TextView) mInflater.inflate(R.layout.seek_bar_value_popup, null, false);
+        mPopupValue.getViewTreeObserver().addOnGlobalLayoutListener(new OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                int width = mPopupValue.getWidth();
+                if (width != mPopupWidth) {
+                    mPopupWidth = mPopupValue.getWidth();
+                    startUpdateViewValue();
+                }
+            }
+        });
 
         initialised = true;
         updateView();
         mSeekBar.setOnSeekBarChangeListener(this);
-    }
-
-    protected WindowManager.LayoutParams getPopupLayoutParams(Context context) {
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                mPopupWidth,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.START | Gravity.TOP;
-        return params;
-    }
-
-    protected TextView onInflatePopupLayout(Context context, LayoutInflater inflater) {
-       return (TextView) inflater.inflate(R.layout.seek_bar_value_popup, null, false);
     }
 
     /**
@@ -270,7 +257,7 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
 
         // change rejected, revert to the previous value
         if (!callChangeListener(newValue)) {
-            Log.i(TAG, "onProgressChanged: new value rejected");
+            Log.i(TAG, "onProgressChanged: new value rejected" );
             seekBar.setProgress(mCurrentValue - mMinValue);
             return;
         }
@@ -301,7 +288,17 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
     }
 
     private void updateCurrentValueText() {
-        mStatusText.setText(String.valueOf(mCurrentValue));
+        if (mCurrentValue == mDefaultValue && mDefaultValue != -1) {
+            mStatusText.setText(R.string.seekbar_default_string);
+            mProgressThumb.setColorFilter(mThumbDefaultValueColor, PorterDuff.Mode.SRC_IN);
+            mUnitsLeftText.setVisibility(View.GONE);
+            mUnitsRightText.setVisibility(View.GONE);
+        } else {
+            mStatusText.setText(String.valueOf(mCurrentValue));
+            mProgressThumb.clearColorFilter();
+            mUnitsLeftText.setVisibility(View.VISIBLE);
+            mUnitsRightText.setVisibility(View.VISIBLE);
+        }
     }
 
     @Override
@@ -316,10 +313,10 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
         stopUpdateViewValue();
         mTrackingTouch = false;
     }
-
     @Override
     protected Object onGetDefaultValue(TypedArray ta, int index) {
-        return ta.getInt(index, DEFAULT_VALUE);
+        int defaultValue = ta.getInt(index, DEFAULT_VALUE);
+        return defaultValue;
     }
 
     @Override
@@ -355,16 +352,27 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
             mainContentView.getLocationInWindow(offsetPos);
         }
         mPopupValue.setText(mUnitsLeft + mCurrentValue + mUnitsRight);
-        mPopupLayoutParams = (WindowManager.LayoutParams) mPopupValue.getLayoutParams();
-        mPopupLayoutParams.x = thumbRect.centerX() + seekBarPos[0] - offsetPos[0] - (mPopupWidth - thumbRect.width()) / 2 + mOffsetX;
-        mPopupLayoutParams.y = seekBarPos[1] - offsetPos[1] + mOffsetY;
-        mPopupValue.setLayoutParams(mPopupLayoutParams);
+        WindowManager.LayoutParams wp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT);
+        wp.gravity = Gravity.LEFT | Gravity.TOP;
+        wp.x = thumbRect.centerX() + seekBarPos[0] - offsetPos[0] - (mPopupWidth - thumbRect.width()) / 2 +
+                (int) getContext().getResources()
+                        .getDimension(R.dimen.seek_bar_preference_cham_value_x_offset);
+        wp.y = seekBarPos[1] - offsetPos[1] +
+                (int) getContext().getResources()
+                        .getDimension(R.dimen.seek_bar_preference_cham_value_y_offset);
+        mPopupValue.setLayoutParams(wp);
         if (mPopupAdded) {
+            wp = (WindowManager.LayoutParams) mPopupValue.getLayoutParams();
             ((WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE))
-                    .updateViewLayout(mPopupValue, mPopupLayoutParams);
+                    .updateViewLayout(mPopupValue, wp);
         } else {
             ((WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE))
-                    .addView(mPopupValue, mPopupLayoutParams);
+                    .addView(mPopupValue, wp);
             mPopupAdded = true;
         }
         mPopupValue.setVisibility(View.VISIBLE);
@@ -374,10 +382,6 @@ public class SeekBarPreferenceCham extends Preference implements SeekBar.OnSeekB
         if (!mPopupAdded) return;
         ((WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE)).removeView(mPopupValue);
         mPopupAdded = false;
-    }
-
-    public void setPopupWidth(@DimenRes int width) {
-        mPopupWidth = (int) getContext().getResources().getDimension(width);
     }
 
     public void setMax(int max) {
